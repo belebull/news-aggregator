@@ -157,164 +157,108 @@ APP.Main = (function () {
     }
 
     function showStory(id) {
-
-      if (inDetails)
-        return;
-
-      inDetails = true;
-
-      var storyDetails = $('#sd-' + id);
-      var left = null;
-
       if (!storyDetails)
         return;
 
-      document.body.classList.add('details-active');
-      storyDetails.style.opacity = 1;
-
-      function animate() {
-
-        // Find out where it currently is.
-        var storyDetailsPosition = storyDetails.getBoundingClientRect();
-
-        // Set the left value if we don't have one already.
-        if (left === null)
-          left = storyDetailsPosition.left;
-
-        // Now figure out where it needs to go.
-        left += (0 - storyDetailsPosition.left) * 0.1;
-
-        // Set up the next bit of the animation if there is more to do.
-        if (Math.abs(left) > 0.5)
-          setTimeout(animate, 4);
-        else
-          left = 0;
-
-        // And update the styles. Wait, is this a read-write cycle?
-        // I hope I don't trigger a forced synchronous layout!
-        storyDetails.style.left = left + 'px';
-      }
-
-      // We want slick, right, so let's do a setTimeout
-      // every few milliseconds. That's going to keep
-      // it all tight. Or maybe we're doing visual changes
-      // and they should be in a requestAnimationFrame
-      setTimeout(animate, 4);
+      storyDetails.classList.add('visible');
+      storyDetails.classList.remove('hidden');
     }
 
-    function hideStory(id) {
+    // We want slick, right, so let's do a setTimeout
+    // every few milliseconds. That's going to keep
+    // it all tight. Or maybe we're doing visual changes
+    // and they should be in a requestAnimationFrame
+    setTimeout(animate, 4);
+  }
 
-      if (!inDetails)
-        return;
+  function hideStory(id) {
 
-      var storyDetails = $('#sd-' + id);
-      var left = 0;
+    if (!inDetails)
+      return;
 
-      document.body.classList.remove('details-active');
-      storyDetails.style.opacity = 0;
+    storyDetails.classList.add('visible');
+    storyDetails.classList.remove('hidden');
+  }
 
-      function animate() {
-
-        // Find out where it currently is.
-        var mainPosition = main.getBoundingClientRect();
-        var storyDetailsPosition = storyDetails.getBoundingClientRect();
-        var target = mainPosition.width + 100;
-
-        // Now figure out where it needs to go.
-        left += (target - storyDetailsPosition.left) * 0.1;
-
-        // Set up the next bit of the animation if there is more to do.
-        if (Math.abs(left - target) > 0.5) {
-          setTimeout(animate, 4);
-        } else {
-          left = target;
-          inDetails = false;
-        }
-
-        // And update the styles. Wait, is this a read-write cycle?
-        // I hope I don't trigger a forced synchronous layout!
-        storyDetails.style.left = left + 'px';
-      }
-
-      // We want slick, right, so let's do a setTimeout
-      // every few milliseconds. That's going to keep
-      // it all tight. Or maybe we're doing visual changes
-      // and they should be in a requestAnimationFrame
-      setTimeout(animate, 4);
-    }
+  // We want slick, right, so let's do a setTimeout
+  // every few milliseconds. That's going to keep
+  // it all tight. Or maybe we're doing visual changes
+  // and they should be in a requestAnimationFrame
+  setTimeout(animate, 4);
+}
 
 
-    main.addEventListener('touchstart', function (evt) {
+  main.addEventListener('touchstart', function (evt) {
 
-      // I just wanted to test what happens if touchstart
-      // gets canceled. Hope it doesn't block scrolling on mobiles...
-      if (Math.random() > 0.97) {
-        evt.preventDefault();
-      }
+  // I just wanted to test what happens if touchstart
+  // gets canceled. Hope it doesn't block scrolling on mobiles...
+  if (Math.random() > 0.97) {
+    evt.preventDefault();
+  }
 
+});
+
+main.addEventListener('scroll', function () {
+
+  var header = $('header');
+  var headerTitles = header.querySelector('.header__title-wrapper');
+  var scrollTopCapped = Math.min(70, main.scrollTop);
+  var scaleString = 'scale(' + (1 - (scrollTopCapped / 300)) + ')';
+
+  header.style.height = (156 - scrollTopCapped) + 'px';
+  headerTitles.style.webkitTransform = scaleString;
+  headerTitles.style.transform = scaleString;
+
+  // Add a shadow to the header.
+  if (main.scrollTop > 70)
+    document.body.classList.add('raised');
+  else
+    document.body.classList.remove('raised');
+
+  // Check if we need to load the next batch of stories.
+  var loadThreshold = (main.scrollHeight - main.offsetHeight -
+    LAZY_LOAD_THRESHOLD);
+  if (main.scrollTop > loadThreshold)
+    loadStoryBatch();
+});
+
+function loadStoryBatch() {
+
+  if (storyLoadCount > 0)
+    return;
+
+  storyLoadCount = count;
+
+  var end = storyStart + count;
+  for (var i = storyStart; i < end; i++) {
+
+    if (i >= stories.length)
+      return;
+
+    var key = String(stories[i]);
+    var story = document.createElement('div');
+    story.setAttribute('id', 's-' + key);
+    story.classList.add('story');
+    story.innerHTML = storyTemplate({
+      title: '...',
+      score: '-',
+      by: '...',
+      time: 0
     });
+    main.appendChild(story);
 
-    main.addEventListener('scroll', function () {
+    APP.Data.getStoryById(stories[i], onStoryData.bind(this, key));
+  }
 
-      var header = $('header');
-      var headerTitles = header.querySelector('.header__title-wrapper');
-      var scrollTopCapped = Math.min(70, main.scrollTop);
-      var scaleString = 'scale(' + (1 - (scrollTopCapped / 300)) + ')';
+  storyStart += count;
 
-      header.style.height = (156 - scrollTopCapped) + 'px';
-      headerTitles.style.webkitTransform = scaleString;
-      headerTitles.style.transform = scaleString;
+}
 
-      // Add a shadow to the header.
-      if (main.scrollTop > 70)
-        document.body.classList.add('raised');
-      else
-        document.body.classList.remove('raised');
+// Bootstrap in the stories.
+APP.Data.getTopStories(function (data) {
+  stories = data;
+  loadStoryBatch();
+  main.classList.remove('loading');
+});
 
-      // Check if we need to load the next batch of stories.
-      var loadThreshold = (main.scrollHeight - main.offsetHeight -
-        LAZY_LOAD_THRESHOLD);
-      if (main.scrollTop > loadThreshold)
-        loadStoryBatch();
-    });
-
-    function loadStoryBatch() {
-
-      if (storyLoadCount > 0)
-        return;
-
-      storyLoadCount = count;
-
-      var end = storyStart + count;
-      for (var i = storyStart; i < end; i++) {
-
-        if (i >= stories.length)
-          return;
-
-        var key = String(stories[i]);
-        var story = document.createElement('div');
-        story.setAttribute('id', 's-' + key);
-        story.classList.add('story');
-        story.innerHTML = storyTemplate({
-          title: '...',
-          score: '-',
-          by: '...',
-          time: 0
-        });
-        main.appendChild(story);
-
-        APP.Data.getStoryById(stories[i], onStoryData.bind(this, key));
-      }
-
-      storyStart += count;
-
-    }
-
-    // Bootstrap in the stories.
-    APP.Data.getTopStories(function (data) {
-      stories = data;
-      loadStoryBatch();
-      main.classList.remove('loading');
-    });
-
-  })();
+})();
